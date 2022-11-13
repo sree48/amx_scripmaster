@@ -1,0 +1,17 @@
+#Mssql DB
+server: "196.1.115.155"
+user: "AEMobile"
+password: "a$m0bil@2015"
+port: "1433"
+database: "AE_Mobile"
+
+log_path: "/home/msf/tmp/AMXScripMaster"
+log_file: "AMXScripMaster"
+
+segments_allowed: "nse_cm,bse_cm,cde_fo,nse_fo,ncx_fo,mcx_fo"
+
+nse_series: "EQ,BE,BZ,GB,E1,RR,IV,SM,ST"
+bse_series: "A,SM,ST,RR"
+index_instruments: "COMDTY,UNDCUR"
+
+env: "uat"

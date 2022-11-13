@@ -1,0 +1,5 @@
+eqDataInsertion   : "exec AMXScripMasterBuilder_Equity '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'"
+dervDataInsertion : "exec AMXScripMasterprocedure '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'"
+backUpProc        : "exec AMXScripMasterBackUp_Proc"
+deleteDervProc    : "exec AMXDeleteDervScrips_Proc"
+deleteEQProc      : "exec AMXDeleteEQScrips_Proc"

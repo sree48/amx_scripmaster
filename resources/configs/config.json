@@ -1,0 +1,9 @@
+{
+	"uat": {
+		
+		"getSecInfo": "https://amxuat.angelbroking.com/report/exchange/v2/getAllSecInfo?"
+	},
+	"prod": {
+		"getSecInfo": ""
+	}
+}
