@@ -14,6 +14,8 @@ func main() {
 
 	service.Init()
 	service.Build()
+	service.Build_MarketCap()
+	service.UpdateStockID()
 }
 
 func initconfig() {

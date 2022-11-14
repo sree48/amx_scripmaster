@@ -33,6 +33,8 @@ const (
 	BackUpProcedure  = "backUpProc"
 	DeleteDerivative = "deleteDervProc"
 	DeleteEquity     = "deleteEQProc"
+	MarketCapQuery   = "marketCapProc"
+	StockIDQuery     = "stockIDUpdate"
 )
 
 // log constants
@@ -59,4 +61,5 @@ const (
 	BaseConfigPathDefaultValue = "resources/configs"
 	BaseConfigPathUsage        = "path to folder that stores your configurations"
 	GetSecinfoUrl              = "getSecInfo"
+	StockMasterUrl             = "stockMaster"
 )

@@ -3,3 +3,5 @@ dervDataInsertion : "exec AMXScripMasterprocedure '%s', '%s', '%s', '%s', '%s', 
 backUpProc        : "exec AMXScripMasterBackUp_Proc"
 deleteDervProc    : "exec AMXDeleteDervScrips_Proc"
 deleteEQProc      : "exec AMXDeleteEQScrips_Proc"
+marketCapProc     : "exec Usp_Update_AEMobile_ScrIpMaster_EQ_MCap"
+stockIDUpdate     : "exec stock_id_update '%s', '%s'"
