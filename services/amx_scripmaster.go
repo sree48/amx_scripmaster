@@ -205,8 +205,8 @@ func Parse_EQ(segData []interface{}, segment string) {
 				strconv.Itoa(int(data["maxSingleTransQty"].(float64))),
 				strconv.Itoa(int(data["maxSingleTransValue"].(float64))),
 				data["qtyUnits"].(string),
-				strconv.Itoa(int(data["priceNum"].(float64))),
-				strconv.Itoa(int(data["priceDen"].(float64))),
+				"1",
+				"1",
 				data["marketType"].(string),
 				strconv.Itoa(int(data["openInterest"].(float64))),
 				strconv.Itoa(int(data["totalValueTraded"].(float64))),
@@ -268,6 +268,11 @@ func Parse_Derv(segData []interface{}, segment string) {
 			strikePrice = strconv.Itoa(int(data["strikePrice"].(float64)))
 			optionType = data["optionType"].(string)
 			assetClass = "derivative"
+			var priceNum string
+			priceNum = "1"
+			if segment == "mcx_fo" || segment == "ncx_fo" {
+				priceNum = strconv.Itoa(int(data["genNum"].(float64)) / int(data["genDen"].(float64)) * int(data["priceNum"].(float64)) / int(data["priceDen"].(float64)))
+			}
 
 			if strings.HasPrefix(instName, "FUT") || strings.HasPrefix(instName, "OPT") {
 				if expDate == "" {
@@ -326,8 +331,8 @@ func Parse_Derv(segData []interface{}, segment string) {
 				strconv.Itoa(int(data["maxSingleTransQty"].(float64))),
 				strconv.Itoa(int(data["maxSingleTransValue"].(float64))),
 				data["qtyUnits"].(string),
-				strconv.Itoa(int(data["priceNum"].(float64))),
-				strconv.Itoa(int(data["priceDen"].(float64))),
+				priceNum,
+				"1",
 				data["marketType"].(string),
 				strconv.Itoa(int(data["openInterest"].(float64))),
 				strconv.Itoa(int(data["totalValueTraded"].(float64))),
