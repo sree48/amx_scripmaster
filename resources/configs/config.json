@@ -2,7 +2,8 @@
 	"uat": {
 		
 		"getSecInfo"	: "https://amxuat.angelbroking.com/report/exchange/v2/getAllSecInfo?",
-		"stockMaster" 	: "http://mojo2.angelbroking.com/Stocks_Stockmaster/getStockMaster"
+		"stockMaster" 	: "http://mojo2.angelbroking.com/Stocks_Stockmaster/getStockMaster",
+		"amxLogin" 		: "https://amxuat.angelbroking.com/login/v2/loginByPassword"
 	},
 	"prod": {
 		"getSecInfo": ""

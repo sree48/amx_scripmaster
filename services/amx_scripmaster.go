@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -40,7 +41,43 @@ func Init() {
 	isBackupDone = BackUp_AMXScripMaster()
 }
 
-func Build() {
+func Login() string {
+
+	url := urlConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.GetLoginUrl)
+	client := http.Client{}
+	body := map[string]string{}
+	body["userid"] = appConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.UserID)
+	body["passorpin"] = appConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.UserPassword)
+	json_req, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(json_req))
+	req.Header.Set("X-SourceID:", "2")
+	req.Header.Set("X-Platform:", "MSIL")
+	req.Header.Set("X-DeviceID:", "MSIL-MW")
+	req.Header.Set("X-UserType:", "1")
+	req.Header.Set("X-OperatingSystem:", "Linux")
+	req.Header.Set("Content-Type:", "application/json")
+
+	response, httpErr := client.Do(req)
+	if httpErr != nil {
+		log.Fatal("HTTP Error Occurred on login : ", httpErr)
+	}
+
+	res, _ := io.ReadAll(response.Body)
+	var apiRes map[string]interface{}
+	json.Unmarshal(res, &apiRes)
+
+	if strings.EqualFold(apiRes[constants.Message].(string), constants.Success) {
+
+		data := apiRes[constants.Data].(map[string]interface{})
+		return data["accesstoken"].(string)
+	}
+
+	log.Fatal("Login Failed : ", apiRes[constants.ErrCode].(string), apiRes[constants.Message].(string))
+	return ""
+}
+
+func Build(accToken string) {
 
 	url := urlConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.GetSecinfoUrl)
 	segmentData := make(map[string][]interface{})
@@ -55,7 +92,7 @@ func Build() {
 
 			client := http.Client{}
 			req, _ := http.NewRequest("GET", finalUrl, nil)
-			req.Header.Set("Authorization", "Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2Njg0MTkzMDcsImlhdCI6MTY2ODMyNTkxMywib21uZW1hbmFnZXJpZCI6MSwic291cmNlaWQiOiIyIiwic3ViIjoiUzQ5NzE3NyJ9.Qw13dEfgv2Uuh915wg8WBcU5Ch-G4LF6Rvd5BFfRd5dpRX9WH95vuqXaOWjv3wK8XudHKO1BjV7lkX6-jJPB_g")
+			req.Header.Set("Authorization", "Bearer "+accToken)
 
 			response, httpErr := client.Do(req)
 

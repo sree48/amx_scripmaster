@@ -13,7 +13,8 @@ func init() {
 func main() {
 
 	service.Init()
-	service.Build()
+	accToken := service.Login()
+	service.Build(accToken)
 	service.Build_MarketCap()
 	service.UpdateStockID()
 }

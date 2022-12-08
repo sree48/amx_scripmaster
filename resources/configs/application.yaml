@@ -14,4 +14,8 @@ nse_series: "EQ,BE,BZ,GB,E1,RR,IV,SM,ST"
 bse_series: "A,SM,ST,RR"
 index_instruments: "COMDTY,UNDCUR"
 
+uat :
+    userID: "MSILADMNU"
+    password: "UAT#$111"
+    
 env: "uat"

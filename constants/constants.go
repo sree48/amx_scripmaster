@@ -13,6 +13,7 @@ const (
 	Success = "success"
 	Failure = "failure"
 	Data    = "data"
+	ErrCode = "errorcode"
 )
 
 // db constants
@@ -62,4 +63,7 @@ const (
 	BaseConfigPathUsage        = "path to folder that stores your configurations"
 	GetSecinfoUrl              = "getSecInfo"
 	StockMasterUrl             = "stockMaster"
+	GetLoginUrl                = "amxLogin"
+	UserID                     = "userID"
+	UserPassword               = "password"
 )
