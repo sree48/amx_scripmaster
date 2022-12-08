@@ -1,6 +1,7 @@
 package mssql
 
 import (
+	_ "github.com/denisenkom/go-mssqldb"
 	log "github.com/sirupsen/logrus"
 	"main.go/constants"
 	"main.go/entities"
