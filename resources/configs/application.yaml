@@ -3,7 +3,7 @@ server: "196.1.115.155"
 user: "AEMobile"
 password: "a$m0bil@2015"
 port: "1433"
-database: "AE_Mobile"
+database: "AE_AMX_Mobile"
 
 log_path: "/home/msf/tmp/AMXScripMaster"
 log_file: "AMXScripMaster"

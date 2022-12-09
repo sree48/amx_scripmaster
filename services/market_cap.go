@@ -30,8 +30,6 @@ func Build_MarketCap() {
 		return
 	}
 
-	log.Infof("Connected to : %s !\n", MsSqlConn.Server)
-
 	defer mssql.CloseDBConnection(db)
 	sQuery := configs.Get(constants.DatabaseConfig).GetString(constants.MarketCapQuery)
 	_, qErr := db.Query(sQuery)

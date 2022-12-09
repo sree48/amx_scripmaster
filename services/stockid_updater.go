@@ -34,8 +34,6 @@ func UpdateStockID() {
 		return
 	}
 
-	log.Infof("Connected to : %s !\n", MsSqlConn.Server)
-
 	defer mssql.CloseDBConnection(db)
 
 	url := configs.Get(constants.APIConfig).GetString(configs.Get(constants.ApplicationConfig).GetString(constants.Env) + "." + constants.StockMasterUrl)

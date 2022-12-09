@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -24,6 +25,7 @@ import (
 var appConfig, urlConfig, dbConfig *viper.Viper
 var vSegments, vNse_Series, vBse_Series, vIndex_Instruments []string
 var isBackupDone bool
+var wg sync.WaitGroup
 
 func Init() {
 
@@ -51,19 +53,22 @@ func Login() string {
 	json_req, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(json_req))
-	req.Header.Set("X-SourceID:", "2")
-	req.Header.Set("X-Platform:", "MSIL")
-	req.Header.Set("X-DeviceID:", "MSIL-MW")
-	req.Header.Set("X-UserType:", "1")
-	req.Header.Set("X-OperatingSystem:", "Linux")
-	req.Header.Set("Content-Type:", "application/json")
+	req.Header.Set("X-SourceID", "2")
+	req.Header.Set("X-Platform", "MSIL")
+	req.Header.Set("X-DeviceID", "MSIL-MW")
+	req.Header.Set("X-UserType", "1")
+	req.Header.Set("X-OperatingSystem", "Linux")
+	req.Header.Set("Content-Type", "application/json")
 
+	log.Info("Requesting Url : ", url, " ", string(json_req), " Headers : ", req.Header)
 	response, httpErr := client.Do(req)
 	if httpErr != nil {
 		log.Fatal("HTTP Error Occurred on login : ", httpErr)
 	}
 
 	res, _ := io.ReadAll(response.Body)
+	log.Info("Response Received : ", string(res))
+
 	var apiRes map[string]interface{}
 	json.Unmarshal(res, &apiRes)
 
@@ -82,6 +87,10 @@ func Build(accToken string) {
 	url := urlConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.GetSecinfoUrl)
 	segmentData := make(map[string][]interface{})
 
+	Delete_Records(dbConfig.GetString(constants.DeleteEquity), "Equity")
+	Delete_Records(dbConfig.GetString(constants.DeleteDerivative), "Derivative")
+
+	wg.Add(len(vSegments))
 	for _, segments := range vSegments {
 
 		isLastPage := false
@@ -94,14 +103,16 @@ func Build(accToken string) {
 			req, _ := http.NewRequest("GET", finalUrl, nil)
 			req.Header.Set("Authorization", "Bearer "+accToken)
 
+			log.Info("Requesting Url : ", finalUrl, " Headers : ", req.Header)
 			response, httpErr := client.Do(req)
-
 			if httpErr != nil {
 				log.Error("HTTP Error Occurred on segment : ", segments, httpErr)
 				return
 			}
 
 			res, _ := io.ReadAll(response.Body)
+			log.Info("Response Received : ", string(res))
+
 			var apiRes map[string]interface{}
 			json.Unmarshal(res, &apiRes)
 			if strings.EqualFold(apiRes[constants.Message].(string), constants.Success) {
@@ -121,22 +132,22 @@ func Build(accToken string) {
 		}
 		log.Info("API call completed for segment : ", segments)
 		if segments == "nse_cm" || segments == "bse_cm" {
+
 			go Parse_EQ(segmentData[segments], segments)
 			delete(segmentData, segments)
+
 		} else {
+
 			go Parse_Derv(segmentData[segments], segments)
 			delete(segmentData, segments)
 		}
 	}
-
-	time.Sleep(5 * time.Second)
+	wg.Wait()
 }
 
 func Parse_EQ(segData []interface{}, segment string) {
 
-	if len(segData) > 0 {
-		Delete_Records(dbConfig.GetString(constants.DeleteEquity), "Equity")
-	}
+	defer wg.Done()
 
 	var count, skip_count int
 	var MsSqlConn *entities.MssqlConnection
@@ -154,7 +165,6 @@ func Parse_EQ(segData []interface{}, segment string) {
 		log.Errorln("MSSQL Connection Check Failed")
 		return
 	}
-	log.Infof("Connected to : %s !\n", MsSqlConn.Server)
 
 	defer mssql.CloseDBConnection(db)
 
@@ -163,13 +173,28 @@ func Parse_EQ(segData []interface{}, segment string) {
 			count++
 			data := segData[outer_index].([]interface{})[inner_index].(map[string]interface{})
 
-			// Skipping
 			if data["remarksText"].(string) == "SP" ||
-				data["symbol"].(string) == "" ||
-				!Check_Series(segment, data["series"].(string)) {
+                                data["symbol"].(string) == "" {
 
 				skip_count++
-				continue
+				log.Info("Skipping ", data)
+				continue //Skipping
+			}
+
+			if segment == "nse_cm" && !Check_Series(segment, data["series"].(string)) {
+
+				skip_count++
+				log.Info("Skipping nse_cm ", data)
+				continue //Skipping
+			}
+
+			token := data["symbol"].(string)
+			if segment == "bse_cm" && !strings.HasPrefix(token, "7") &&
+				!strings.HasPrefix(token, "5") && (!strings.HasPrefix(token, "8") && !Check_Series(segment, data["series"].(string) )) {
+
+				skip_count++
+				log.Info("Skipping bse_cm ", data)
+				continue //Skipping
 			}
 
 			divider, precision := helper.GetDividerAndPrecision(data["marketSegmentId"].(string))
@@ -184,7 +209,6 @@ func Parse_EQ(segData []interface{}, segment string) {
 				data["symbolName"].(string),
 				data["series"].(string),
 				data["instrumentType"].(string),
-				strconv.Itoa(int(data["normalMarketAllowed"].(float64))),
 				divider, precision, assetClass,
 				helper.GetMaturityDate(data["issueMaturityDate"].(string)),
 				data["securityDesc"].(string),
@@ -231,9 +255,7 @@ func Parse_EQ(segData []interface{}, segment string) {
 
 func Parse_Derv(segData []interface{}, segment string) {
 
-	if len(segData) > 0 {
-		Delete_Records(dbConfig.GetString(constants.DeleteDerivative), "Derivative")
-	}
+	defer wg.Done()
 
 	var count, skip_count int
 	var MsSqlConn *entities.MssqlConnection
@@ -251,7 +273,6 @@ func Parse_Derv(segData []interface{}, segment string) {
 		log.Errorln("MSSQL Connection Check Failed")
 		return
 	}
-	log.Infof("Connected to : %s !\n", MsSqlConn.Server)
 
 	defer mssql.CloseDBConnection(db)
 
@@ -271,19 +292,26 @@ func Parse_Derv(segData []interface{}, segment string) {
 			var priceNum string
 			priceNum = "1"
 			if segment == "mcx_fo" || segment == "ncx_fo" {
-				priceNum = strconv.Itoa(int(data["genNum"].(float64)) / int(data["genDen"].(float64)) * int(data["priceNum"].(float64)) / int(data["priceDen"].(float64)))
+
+				if int(data["genDen"].(float64)) == 0 || int(data["priceDen"].(float64)) == 0 {
+					priceNum = "1"
+				} else {
+					priceNum = strconv.Itoa(int(data["genNum"].(float64)) / int(data["genDen"].(float64)) * int(data["priceNum"].(float64)) / int(data["priceDen"].(float64)))
+				}
 			}
 
 			if strings.HasPrefix(instName, "FUT") || strings.HasPrefix(instName, "OPT") {
 				if expDate == "" {
 
 					skip_count++
+					log.Info("Skipping expty expiry ", data)
 					continue //Skipping
 				}
 
 				if Expiry_Validate(expDate) {
 
 					skip_count++
+					log.Info("Skipping expired contract ", data)
 					continue //Skipping
 				}
 
@@ -301,7 +329,8 @@ func Parse_Derv(segData []interface{}, segment string) {
 			} else {
 
 				skip_count++
-				continue
+				log.Info("Skipping invalid derivative contract ", data)
+				continue //Skipping
 			}
 
 			sQuery := dbConfig.GetString(constants.DERInsertQuery)
@@ -375,7 +404,7 @@ func BackUp_AMXScripMaster() bool {
 		return false
 	}
 
-	log.Infof("Connected to : %s !\n", MsSqlConn.Server)
+	log.Infof("Connected to : %s \n", MsSqlConn.Server)
 
 	defer mssql.CloseDBConnection(db)
 
@@ -415,13 +444,11 @@ func Delete_Records(sQuery, segment string) {
 		return
 	}
 
-	log.Infof("Connected to : %s !\n", MsSqlConn.Server)
-
 	defer mssql.CloseDBConnection(db)
 
 	_, qErr := db.Query(sQuery)
 	if qErr != nil {
-		log.Error("error in backup AMXScripmaster : ", sQuery, qErr)
+		log.Error("error in deleting AMXScripmaster : ", sQuery, qErr)
 		return
 	}
 
