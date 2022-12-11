@@ -3,13 +3,13 @@ module main.go
 go 1.19
 
 require (
+	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
 )
 
 require (
-	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect

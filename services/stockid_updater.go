@@ -9,27 +9,24 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"main.go/constants"
-	"main.go/entities"
 	"main.go/persistance/mssql"
 	configs "main.go/utils/config"
 )
 
-func UpdateStockID() {
+func (amx AMXConfig) UpdateStockID() {
 
 	log.Info("Updating Stock ID Details...")
 
-	var MsSqlConn *entities.MssqlConnection
 	var db *sql.DB
 	var err error
 
-	MsSqlConn = mssql.InitMssql()
-	db, err = mssql.GetDBConnection(MsSqlConn)
+	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
 		log.Errorln("Error in mssql connection creation")
 		return
 	}
 
-	if !mssql.MssqlConnCheck(db, MsSqlConn) {
+	if !amx.MSSQLEntities.MssqlConnCheck(db) {
 		log.Errorln("MSSQL Connection  Failed")
 		return
 	}

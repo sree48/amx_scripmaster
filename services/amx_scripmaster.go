@@ -10,46 +10,44 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"main.go/constants"
-	"main.go/entities"
 	helper "main.go/helper"
 	"main.go/persistance/mssql"
-	configs "main.go/utils/config"
 )
 
-var appConfig, urlConfig, dbConfig *viper.Viper
-var vSegments, vNse_Series, vBse_Series, vIndex_Instruments []string
-var isBackupDone bool
-var wg sync.WaitGroup
-
-func Init() {
-
-	appConfig = configs.Get(constants.ApplicationConfig)
-	urlConfig = configs.Get(constants.APIConfig)
-	dbConfig = configs.Get(constants.DatabaseConfig)
-	segments := appConfig.GetString(constants.SegmentsAllowed)
-	nse_series := appConfig.GetString(constants.NseSeries)
-	bse_series := appConfig.GetString(constants.BseSeries)
-	index_instruments := appConfig.GetString(constants.IndexInstruments)
-	vSegments = strings.Split(segments, ",")
-	vNse_Series = strings.Split(nse_series, ",")
-	vBse_Series = strings.Split(bse_series, ",")
-	vIndex_Instruments = strings.Split(index_instruments, ",")
-	isBackupDone = BackUp_AMXScripMaster()
+type AMXConfig struct {
+	AppConfig, UrlConfig, DBConfig                          *viper.Viper
+	MSSQLEntities                                           mssql.MSSQL
+	ISBackupDone                                            bool
+	vSegments, vNse_Series, vBse_Series, vIndex_Instruments []string
 }
 
-func Login() string {
+var wg sync.WaitGroup
 
-	url := urlConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.GetLoginUrl)
+func (amx AMXConfig) Init() {
+	segments := amx.AppConfig.GetString(constants.SegmentsAllowed)
+	nse_series := amx.AppConfig.GetString(constants.NseSeries)
+	bse_series := amx.AppConfig.GetString(constants.BseSeries)
+	index_instruments := amx.AppConfig.GetString(constants.IndexInstruments)
+	amx.vSegments = strings.Split(segments, ",")
+	amx.vNse_Series = strings.Split(nse_series, ",")
+	amx.vBse_Series = strings.Split(bse_series, ",")
+	amx.vIndex_Instruments = strings.Split(index_instruments, ",")
+	amx.MSSQLEntities = mssql.MSSQL{Server: amx.AppConfig.GetString(constants.Server), Database: amx.AppConfig.GetString(constants.Database), Port: amx.AppConfig.GetInt(constants.Port), User: amx.AppConfig.GetString(constants.User), Password: amx.AppConfig.GetString(constants.Password)}
+}
+
+func (amx AMXConfig) Login() string {
+
+	url := amx.UrlConfig.GetString(amx.AppConfig.GetString(constants.Env) + "." + constants.GetLoginUrl)
 	client := http.Client{}
 	body := map[string]string{}
-	body["userid"] = appConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.UserID)
-	body["passorpin"] = appConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.UserPassword)
+	body["userid"] = amx.AppConfig.GetString(amx.AppConfig.GetString(constants.Env) + "." + constants.UserID)
+	body["passorpin"] = amx.AppConfig.GetString(amx.AppConfig.GetString(constants.Env) + "." + constants.UserPassword)
 	json_req, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(json_req))
@@ -82,16 +80,16 @@ func Login() string {
 	return ""
 }
 
-func Build(accToken string) {
+func (amx AMXConfig) Build(accToken string) {
 
-	url := urlConfig.GetString(appConfig.GetString(constants.Env) + "." + constants.GetSecinfoUrl)
+	url := amx.UrlConfig.GetString(amx.AppConfig.GetString(constants.Env) + "." + constants.GetSecinfoUrl)
 	segmentData := make(map[string][]interface{})
 
-	Delete_Records(dbConfig.GetString(constants.DeleteEquity), "Equity")
-	Delete_Records(dbConfig.GetString(constants.DeleteDerivative), "Derivative")
+	amx.Delete_Records(amx.DBConfig.GetString(constants.DeleteEquity), "Equity")
+	amx.Delete_Records(amx.DBConfig.GetString(constants.DeleteDerivative), "Derivative")
 
-	wg.Add(len(vSegments))
-	for _, segments := range vSegments {
+	wg.Add(len(amx.vSegments))
+	for _, segments := range amx.vSegments {
 
 		isLastPage := false
 		page := "1"
@@ -133,35 +131,33 @@ func Build(accToken string) {
 		log.Info("API call completed for segment : ", segments)
 		if segments == "nse_cm" || segments == "bse_cm" {
 
-			go Parse_EQ(segmentData[segments], segments)
+			go amx.Parse_EQ(segmentData[segments], segments)
 			delete(segmentData, segments)
 
 		} else {
 
-			go Parse_Derv(segmentData[segments], segments)
+			go amx.Parse_Derv(segmentData[segments], segments)
 			delete(segmentData, segments)
 		}
 	}
 	wg.Wait()
 }
 
-func Parse_EQ(segData []interface{}, segment string) {
+func (amx AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 
 	defer wg.Done()
 
 	var count, skip_count int
-	var MsSqlConn *entities.MssqlConnection
 	var db *sql.DB
 	var err error
 
-	MsSqlConn = mssql.InitMssql()
-	db, err = mssql.GetDBConnection(MsSqlConn)
+	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
 		log.Errorln("Error in mssql connection creation")
 		return
 	}
 
-	if !mssql.MssqlConnCheck(db, MsSqlConn) {
+	if !amx.MSSQLEntities.MssqlConnCheck(db) {
 		log.Errorln("MSSQL Connection Check Failed")
 		return
 	}
@@ -174,14 +170,14 @@ func Parse_EQ(segData []interface{}, segment string) {
 			data := segData[outer_index].([]interface{})[inner_index].(map[string]interface{})
 
 			if data["remarksText"].(string) == "SP" ||
-                                data["symbol"].(string) == "" {
+				data["symbol"].(string) == "" {
 
 				skip_count++
 				log.Info("Skipping ", data)
 				continue //Skipping
 			}
 
-			if segment == "nse_cm" && !Check_Series(segment, data["series"].(string)) {
+			if segment == "nse_cm" && !amx.Check_Series(segment, data["series"].(string)) {
 
 				skip_count++
 				log.Info("Skipping nse_cm ", data)
@@ -190,7 +186,7 @@ func Parse_EQ(segData []interface{}, segment string) {
 
 			token := data["symbol"].(string)
 			if segment == "bse_cm" && !strings.HasPrefix(token, "7") &&
-				!strings.HasPrefix(token, "5") && (!strings.HasPrefix(token, "8") && !Check_Series(segment, data["series"].(string) )) {
+				!strings.HasPrefix(token, "5") && (!strings.HasPrefix(token, "8") && !amx.Check_Series(segment, data["series"].(string))) {
 
 				skip_count++
 				log.Info("Skipping bse_cm ", data)
@@ -201,7 +197,7 @@ func Parse_EQ(segData []interface{}, segment string) {
 			assetClass := "cash"
 			expDate := "01 Jan 1980"
 
-			sQuery := dbConfig.GetString(constants.EQInsertQuery)
+			sQuery := amx.DBConfig.GetString(constants.EQInsertQuery)
 			tsql := fmt.Sprintf(
 				sQuery,
 				data["symbol"].(string)+"_"+helper.GetSegmentId(data["marketSegmentId"].(string)),
@@ -253,23 +249,21 @@ func Parse_EQ(segData []interface{}, segment string) {
 	log.Info("Processed - Segment : ", segment, " - Count : ", count, " - Skipped : ", skip_count)
 }
 
-func Parse_Derv(segData []interface{}, segment string) {
+func (amx AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 
 	defer wg.Done()
 
 	var count, skip_count int
-	var MsSqlConn *entities.MssqlConnection
 	var db *sql.DB
 	var err error
 
-	MsSqlConn = mssql.InitMssql()
-	db, err = mssql.GetDBConnection(MsSqlConn)
+	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
 		log.Errorln("Error in mssql connection creation")
 		return
 	}
 
-	if !mssql.MssqlConnCheck(db, MsSqlConn) {
+	if !amx.MSSQLEntities.MssqlConnCheck(db) {
 		log.Errorln("MSSQL Connection Check Failed")
 		return
 	}
@@ -322,7 +316,7 @@ func Parse_Derv(segData []interface{}, segment string) {
 					details += " " + optionType + " " + helper.FormatStrikePrice(strikePrice, divider, precision)
 				}
 
-			} else if Check_Index(instName) {
+			} else if amx.Check_Index(instName) {
 
 				details += data["securityDesc"].(string)
 
@@ -333,7 +327,7 @@ func Parse_Derv(segData []interface{}, segment string) {
 				continue //Skipping
 			}
 
-			sQuery := dbConfig.GetString(constants.DERInsertQuery)
+			sQuery := amx.DBConfig.GetString(constants.DERInsertQuery)
 			tsql := fmt.Sprintf(
 				sQuery,
 				data["symbol"].(string)+"_"+helper.GetSegmentId(data["marketSegmentId"].(string)),
@@ -384,31 +378,28 @@ func Parse_Derv(segData []interface{}, segment string) {
 	log.Info("Processed - Segment : ", segment, " - Count : ", count, " - Skipped : ", skip_count)
 }
 
-func BackUp_AMXScripMaster() bool {
+func (amx AMXConfig) BackUp_AMXScripMaster() bool {
 
 	log.Info("Backing Up...")
-
-	var MsSqlConn *entities.MssqlConnection
 	var db *sql.DB
 	var err error
 
-	MsSqlConn = mssql.InitMssql()
-	db, err = mssql.GetDBConnection(MsSqlConn)
+	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
 		log.Errorln("Error in mssql connection creation")
 		return false
 	}
 
-	if !mssql.MssqlConnCheck(db, MsSqlConn) {
+	if !amx.MSSQLEntities.MssqlConnCheck(db) {
 		log.Errorln("MSSQL Connection  Failed")
 		return false
 	}
 
-	log.Infof("Connected to : %s \n", MsSqlConn.Server)
+	log.Infof("Connected to : %s \n", amx.MSSQLEntities.Server)
 
 	defer mssql.CloseDBConnection(db)
 
-	sQuery := dbConfig.GetString(constants.BackUpProcedure)
+	sQuery := amx.DBConfig.GetString(constants.BackUpProcedure)
 	_, qErr := db.Query(sQuery)
 	if qErr != nil {
 		log.Error("error in backup AMXScripmaster : ", sQuery, qErr)
@@ -420,26 +411,24 @@ func BackUp_AMXScripMaster() bool {
 	return true
 }
 
-func Delete_Records(sQuery, segment string) {
+func (amx AMXConfig) Delete_Records(sQuery, segment string) {
 
-	if !isBackupDone {
+	if !amx.ISBackupDone {
 		return
 	}
 
 	log.Info("Deleting " + segment + " ...")
 
-	var MsSqlConn *entities.MssqlConnection
 	var db *sql.DB
 	var err error
 
-	MsSqlConn = mssql.InitMssql()
-	db, err = mssql.GetDBConnection(MsSqlConn)
+	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
 		log.Errorln("Error in mssql connection creation")
 		return
 	}
 
-	if !mssql.MssqlConnCheck(db, MsSqlConn) {
+	if !amx.MSSQLEntities.MssqlConnCheck(db) {
 		log.Errorln("MSSQL Connection  Failed")
 		return
 	}
@@ -455,18 +444,18 @@ func Delete_Records(sQuery, segment string) {
 	log.Info(segment + "Cleaned...")
 }
 
-func Check_Series(segment string, series string) bool {
+func (amx AMXConfig) Check_Series(segment string, series string) bool {
 
 	switch {
 	case segment == "nse_cm":
-		for _, s := range vNse_Series {
+		for _, s := range amx.vNse_Series {
 			if s == series {
 				return true
 			}
 		}
 		return false
 	case segment == "bse_cm":
-		for _, s := range vBse_Series {
+		for _, s := range amx.vBse_Series {
 			if s == series {
 				return true
 			}
@@ -477,9 +466,9 @@ func Check_Series(segment string, series string) bool {
 	}
 }
 
-func Check_Index(instName string) bool {
+func (amx AMXConfig) Check_Index(instName string) bool {
 
-	for _, s := range vIndex_Instruments {
+	for _, s := range amx.vIndex_Instruments {
 		if s == instName {
 			return true
 		}
