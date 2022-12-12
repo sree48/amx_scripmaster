@@ -10,10 +10,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"main.go/constants"
 	"main.go/persistance/mssql"
-	configs "main.go/utils/config"
 )
 
-func (amx AMXConfig) UpdateStockID() {
+func (amx *AMXConfig) UpdateStockID() {
 
 	log.Info("Updating Stock ID Details...")
 
@@ -33,7 +32,7 @@ func (amx AMXConfig) UpdateStockID() {
 
 	defer mssql.CloseDBConnection(db)
 
-	url := configs.Get(constants.APIConfig).GetString(configs.Get(constants.ApplicationConfig).GetString(constants.Env) + "." + constants.StockMasterUrl)
+	url := amx.UrlConfig.GetString(amx.AppConfig.GetString(constants.Env) + "." + constants.StockMasterUrl)
 	client := http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
 	response, httpErr := client.Do(req)
@@ -67,7 +66,7 @@ func (amx AMXConfig) UpdateStockID() {
 			continue
 		}
 
-		sQuery := configs.Get(constants.DatabaseConfig).GetString(constants.StockIDQuery)
+		sQuery := amx.DBConfig.GetString(constants.StockIDQuery)
 		tsql := fmt.Sprintf(
 			sQuery,
 			sid,

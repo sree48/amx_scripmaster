@@ -6,10 +6,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"main.go/constants"
 	"main.go/persistance/mssql"
-	configs "main.go/utils/config"
 )
 
-func (amx AMXConfig) Build_MarketCap() {
+func (amx *AMXConfig) Build_MarketCap() {
 
 	log.Info("Updating Market Cap Details...")
 
@@ -28,7 +27,7 @@ func (amx AMXConfig) Build_MarketCap() {
 	}
 
 	defer mssql.CloseDBConnection(db)
-	sQuery := configs.Get(constants.DatabaseConfig).GetString(constants.MarketCapQuery)
+	sQuery := amx.DBConfig.GetString(constants.MarketCapQuery)
 	_, qErr := db.Query(sQuery)
 	if qErr != nil {
 		log.Error("error in Updating Market Cap Details : ", sQuery, qErr)
