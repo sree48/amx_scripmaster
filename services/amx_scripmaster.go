@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,11 +21,20 @@ import (
 	"main.go/persistance/mssql"
 )
 
+type Logger struct {
+	IsDBFailed     bool
+	IsAPIFailed    bool
+	FailureMessage string
+	Details        string
+	Url            string
+}
+
 type AMXConfig struct {
 	AppConfig, UrlConfig, DBConfig                          *viper.Viper
 	MSSQLEntities                                           mssql.MSSQL
 	ISBackupDone                                            bool
 	vSegments, vNse_Series, vBse_Series, vIndex_Instruments []string
+	Log                                                     Logger
 }
 
 var wg sync.WaitGroup
@@ -63,7 +73,12 @@ func (amx *AMXConfig) Login() string {
 	log.Info("Requesting Url : ", url, " ", string(json_req), " Headers : ", req.Header)
 	response, httpErr := client.Do(req)
 	if httpErr != nil {
-		log.Fatal("HTTP Error Occurred on login : ", httpErr)
+		log.Error("HTTP Error Occurred on login : ", httpErr)
+		amx.Log.IsAPIFailed = true
+		amx.Log.FailureMessage = httpErr.Error()
+		amx.Log.Details = "AMX login api has been failed"
+		amx.Log.Url = url
+		amx.LogStatus()
 	}
 
 	res, _ := io.ReadAll(response.Body)
@@ -76,9 +91,16 @@ func (amx *AMXConfig) Login() string {
 
 		data := apiRes[constants.Data].(map[string]interface{})
 		return data["accesstoken"].(string)
+
+	} else {
+
+		amx.Log.IsAPIFailed = true
+		amx.Log.FailureMessage = apiRes[constants.ErrCode].(string) + " " + apiRes[constants.Message].(string)
+		amx.Log.Details = "AMX login api has been failed"
+		amx.Log.Url = url
+		amx.LogStatus()
 	}
 
-	log.Fatal("Login Failed : ", apiRes[constants.ErrCode].(string), apiRes[constants.Message].(string))
 	return ""
 }
 
@@ -107,7 +129,11 @@ func (amx *AMXConfig) Build(accToken string) {
 			response, httpErr := client.Do(req)
 			if httpErr != nil {
 				log.Error("HTTP Error Occurred on segment : ", segments, httpErr)
-				return
+				amx.Log.IsAPIFailed = true
+				amx.Log.FailureMessage = httpErr.Error()
+				amx.Log.Details = "AMX ScripMaster api has been failed"
+				amx.Log.Url = url
+				amx.LogStatus()
 			}
 
 			res, _ := io.ReadAll(response.Body)
@@ -126,8 +152,12 @@ func (amx *AMXConfig) Build(accToken string) {
 
 			} else {
 
-				log.Error("GetSecInfo API Failed : ", apiRes[constants.Message])
-				return
+				amx.Log.IsAPIFailed = true
+				amx.Log.FailureMessage = apiRes[constants.Message].(string)
+				amx.Log.Details = "AMX ScripMaster api has been failed"
+				amx.Log.Url = url
+				amx.LogStatus()
+
 			}
 		}
 		log.Info("API call completed for segment : ", segments)
@@ -155,13 +185,17 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 
 	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
-		log.Errorln("Error in mssql connection creation")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = err.Error()
+		amx.Log.Details = "MSSQL - Failed to create connection"
+		amx.LogStatus()
 	}
 
 	if !amx.MSSQLEntities.MssqlConnCheck(db) {
-		log.Errorln("MSSQL Connection Check Failed")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = "MSSQL Reconnect attepmts has been failed"
+		amx.Log.Details = "MSSQL - Connection Inactive"
+		amx.LogStatus()
 	}
 
 	defer mssql.CloseDBConnection(db)
@@ -245,6 +279,10 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 			_, qErr := db.Query(tsql)
 			if qErr != nil {
 				log.Error("error in updating AMXScripmaster : ", tsql, qErr)
+				amx.Log.IsDBFailed = true
+				amx.Log.FailureMessage = qErr.Error()
+				amx.Log.Details = "Query execution failed"
+				amx.LogStatus()
 			}
 		}
 	}
@@ -261,13 +299,17 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 
 	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
-		log.Errorln("Error in mssql connection creation")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = err.Error()
+		amx.Log.Details = "MSSQL - Failed to create connection"
+		amx.LogStatus()
 	}
 
 	if !amx.MSSQLEntities.MssqlConnCheck(db) {
-		log.Errorln("MSSQL Connection Check Failed")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = "MSSQL Reconnect attepmts has been failed"
+		amx.Log.Details = "MSSQL - Connection Inactive"
+		amx.LogStatus()
 	}
 
 	defer mssql.CloseDBConnection(db)
@@ -374,6 +416,10 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 			_, qErr := db.Query(tsql)
 			if qErr != nil {
 				log.Error("error in updating AMXScripmaster : ", tsql, qErr)
+				amx.Log.IsDBFailed = true
+				amx.Log.FailureMessage = qErr.Error()
+				amx.Log.Details = "Query execution failed"
+				amx.LogStatus()
 			}
 		}
 	}
@@ -388,15 +434,17 @@ func (amx *AMXConfig) BackUp_AMXScripMaster() {
 
 	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
-		log.Errorln("Error in mssql connection creation")
-		amx.ISBackupDone = false
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = err.Error()
+		amx.Log.Details = "MSSQL - Failed to create connection"
+		amx.LogStatus()
 	}
 
 	if !amx.MSSQLEntities.MssqlConnCheck(db) {
-		log.Errorln("MSSQL Connection  Failed")
-		amx.ISBackupDone = false
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = "MSSQL Reconnect attepmts has been failed"
+		amx.Log.Details = "MSSQL - Connection Inactive"
+		amx.LogStatus()
 	}
 
 	log.Infof("Connected to : %s \n", amx.MSSQLEntities.Server)
@@ -407,8 +455,10 @@ func (amx *AMXConfig) BackUp_AMXScripMaster() {
 	_, qErr := db.Query(sQuery)
 	if qErr != nil {
 		log.Error("error in backup AMXScripmaster : ", sQuery, qErr)
-		amx.ISBackupDone = false
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = qErr.Error()
+		amx.Log.Details = "Query execution failed"
+		amx.LogStatus()
 	}
 
 	log.Info("Back Up Completed...")
@@ -429,21 +479,27 @@ func (amx *AMXConfig) Delete_Records(sQuery, segment string) {
 
 	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
-		log.Errorln("Error in mssql connection creation")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = err.Error()
+		amx.Log.Details = "MSSQL - Failed to create connection"
+		amx.LogStatus()
 	}
 
 	if !amx.MSSQLEntities.MssqlConnCheck(db) {
-		log.Errorln("MSSQL Connection  Failed")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = "MSSQL Reconnect attepmts has been failed"
+		amx.Log.Details = "MSSQL - Connection Inactive"
+		amx.LogStatus()
 	}
 
 	defer mssql.CloseDBConnection(db)
 
 	_, qErr := db.Query(sQuery)
 	if qErr != nil {
-		log.Error("error in deleting AMXScripmaster : ", sQuery, qErr)
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = qErr.Error()
+		amx.Log.Details = "Query execution failed"
+		amx.LogStatus()
 	}
 
 	log.Info(segment + "Cleaned...")
@@ -498,4 +554,32 @@ func Expiry_Validate(expDate string) bool {
 		}
 	}
 	return false
+}
+
+func (amx *AMXConfig) LogStatus() {
+
+	if amx.Log.IsAPIFailed == true {
+
+		log.Error("-----------------------------------------------------------------")
+		log.Error("Details ", amx.Log.Details)
+		log.Error("Contact : API Team")
+		log.Error("Url : ", amx.Log.Url)
+		log.Error("Error : ", amx.Log.FailureMessage)
+		log.Error("-----------------------------------------------------------------")
+		os.Exit(1)
+
+	} else if amx.Log.IsDBFailed == true {
+
+		log.Error("-----------------------------------------------------------------")
+		log.Error("Details ", amx.Log.Details)
+		log.Error("Contact : MSIL Team")
+		log.Error("Error : ", amx.Log.FailureMessage)
+		log.Error("-----------------------------------------------------------------")
+		os.Exit(1)
+
+	} else {
+
+		log.Info("Records updated into amx scripmaster successfully")
+
+	}
 }

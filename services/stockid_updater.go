@@ -21,13 +21,17 @@ func (amx *AMXConfig) UpdateStockID() {
 
 	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
-		log.Errorln("Error in mssql connection creation")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = err.Error()
+		amx.Log.Details = "MSSQL - Failed to create connection"
+		amx.LogStatus()
 	}
 
 	if !amx.MSSQLEntities.MssqlConnCheck(db) {
-		log.Errorln("MSSQL Connection  Failed")
-		return
+		amx.Log.IsDBFailed = true
+		amx.Log.FailureMessage = "MSSQL Reconnect attepmts has been failed"
+		amx.Log.Details = "MSSQL - Connection Inactive"
+		amx.LogStatus()
 	}
 
 	defer mssql.CloseDBConnection(db)
@@ -37,8 +41,14 @@ func (amx *AMXConfig) UpdateStockID() {
 	req, _ := http.NewRequest("GET", url, nil)
 	response, httpErr := client.Do(req)
 	if httpErr != nil {
+
 		log.Error("HTTP Error Occurred on Stock Master: ", httpErr)
-		return
+		amx.Log.IsAPIFailed = true
+		amx.Log.FailureMessage = httpErr.Error()
+		amx.Log.Details = "Mojo api has been failed"
+		amx.Log.Url = url
+		amx.LogStatus()
+
 	}
 
 	res, _ := io.ReadAll(response.Body)
@@ -46,8 +56,12 @@ func (amx *AMXConfig) UpdateStockID() {
 	json.Unmarshal(res, &apiRes)
 
 	if apiRes["message"] != "Success" {
-		log.Error("Stock Master API Failed", apiRes["message"])
-		return
+
+		amx.Log.IsAPIFailed = true
+		amx.Log.FailureMessage = apiRes["message"].(string)
+		amx.Log.Details = "Mojo api has been failed"
+		amx.Log.Url = url
+		amx.LogStatus()
 	}
 
 	var data []map[string]interface{}

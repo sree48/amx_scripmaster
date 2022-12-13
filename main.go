@@ -14,7 +14,7 @@ func init() {
 
 func main() {
 
-	amx_config := &service.AMXConfig{AppConfig: configs.Get(constants.ApplicationConfig), UrlConfig: configs.Get(constants.APIConfig), DBConfig: configs.Get(constants.DatabaseConfig)}
+	amx_config := &service.AMXConfig{AppConfig: configs.Get(constants.ApplicationConfig), UrlConfig: configs.Get(constants.APIConfig), DBConfig: configs.Get(constants.DatabaseConfig), ISBackupDone: false}
 	service.AMXScripmaster.Init(amx_config)
 	services.AMXScripmaster.BackUp_AMXScripMaster(amx_config)
 	accToken := service.AMXScripmaster.Login(amx_config)
