@@ -82,7 +82,7 @@ func (amx *AMXConfig) Login() string {
 	}
 
 	res, _ := io.ReadAll(response.Body)
-	log.Info().Stringer("Requesting Url", req.URL).RawJSON("Request", json_req).Interface("Headers", req.Header).RawJSON("Response", res)
+	log.Info().Stringer("Requesting Url", req.URL).RawJSON("Request", json_req).Interface("Headers", req.Header).RawJSON("Response", res).Msg("")
 
 	var apiRes map[string]interface{}
 	json.Unmarshal(res, &apiRes)
@@ -138,7 +138,7 @@ func (amx *AMXConfig) Build(accToken string) {
 			}
 
 			res, _ := io.ReadAll(response.Body)
-			log.Info().Stringer("Requesting Url", req.URL).Interface("Headers", req.Header).RawJSON("Response", res)
+			log.Info().Stringer("Requesting Url", req.URL).Interface("Headers", req.Header).RawJSON("Response", res).Msg("")
 
 			var apiRes map[string]interface{}
 			json.Unmarshal(res, &apiRes)

@@ -53,7 +53,7 @@ func (amx *AMXConfig) UpdateStockID() {
 	}
 
 	res, _ := io.ReadAll(response.Body)
-	log.Info().Stringer("Requesting Url", req.URL).RawJSON("Response", res)
+	log.Info().Stringer("Requesting Url", req.URL).RawJSON("Response", res).Msg("")
 	var apiRes map[string]interface{}
 	json.Unmarshal(res, &apiRes)
 
