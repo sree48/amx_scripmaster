@@ -5,9 +5,6 @@ password: "a$m0bil@2015"
 port: "1433"
 database: "AE_AMX_Mobile"
 
-log_path: "/home/msf/tmp/AMXScripMaster"
-log_file: "AMXScripMaster"
-
 segments_allowed: "nse_fo,nse_cm,bse_cm,cde_fo,ncx_fo,mcx_fo"
 
 nse_series: "EQ,BE,BZ,GB,E1,RR,IV,SM,ST"

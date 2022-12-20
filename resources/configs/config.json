@@ -6,6 +6,8 @@
 		"amxLogin" 		: "https://amxuat.angelbroking.com/login/v2/loginByPassword"
 	},
 	"prod": {
-		"getSecInfo": ""
+		"getSecInfo"	: "https://amx.angeltrade.com/report/exchange/v2/getAllSecInfo/?",
+		"stockMaster"	: "http://mojo2.angelbroking.com/Stocks_Stockmaster/getStockMaster",
+		"amxLogin"		: "http://amxtxnapis.angeltrade.com/login/v2/loginByPassword"
 	}
 }

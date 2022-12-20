@@ -1,21 +1,21 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"context"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"main.go/constants"
 	"main.go/persistance/mssql"
 )
 
 func (amx *AMXConfig) UpdateStockID() {
 
-	log.Info("Updating Stock ID Details...")
+	log.Info().Msg("Updating Stock ID Details...")
 
 	var db *sql.DB
 	var err error
@@ -43,7 +43,7 @@ func (amx *AMXConfig) UpdateStockID() {
 	response, httpErr := client.Do(req)
 	if httpErr != nil {
 
-		log.Error("HTTP Error Occurred on Stock Master: ", httpErr)
+		log.Error().Stringer("Requesting Url : ", req.URL).Err(httpErr).Msg("Mojo API Has Been Failed")
 		amx.Log.IsAPIFailed = true
 		amx.Log.FailureMessage = httpErr.Error()
 		amx.Log.Details = "Mojo api has been failed"
@@ -53,6 +53,7 @@ func (amx *AMXConfig) UpdateStockID() {
 	}
 
 	res, _ := io.ReadAll(response.Body)
+	log.Info().Stringer("Requesting Url", req.URL).RawJSON("Response", res)
 	var apiRes map[string]interface{}
 	json.Unmarshal(res, &apiRes)
 
@@ -88,12 +89,12 @@ func (amx *AMXConfig) UpdateStockID() {
 			isin)
 
 		ctx := context.Background()
-                _, qErr := db.ExecContext(ctx, tsql)
+		_, qErr := db.ExecContext(ctx, tsql)
 
 		if qErr != nil {
-			log.Error("Error in stock id updation : ", tsql, qErr)
+			log.Error().Str("Query", tsql).Err(qErr).Msg("Error In Stock Id Updation")
 		}
 	}
 
-	log.Info("Stock ID Updated")
+	log.Info().Msg("Stock ID Updated")
 }

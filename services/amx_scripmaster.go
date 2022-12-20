@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,9 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"context"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"main.go/constants"
 	helper "main.go/helper"
@@ -71,10 +71,9 @@ func (amx *AMXConfig) Login() string {
 	req.Header.Set("X-OperatingSystem", "Linux")
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Info("Requesting Url : ", url, " ", string(json_req), " Headers : ", req.Header)
 	response, httpErr := client.Do(req)
 	if httpErr != nil {
-		log.Error("HTTP Error Occurred on login : ", httpErr)
+		log.Error().Stringer("Requesting Url : ", req.URL).RawJSON("Request : ", json_req).Interface("Headers : ", req.Header).Err(httpErr).Msg("AMX Login Failed")
 		amx.Log.IsAPIFailed = true
 		amx.Log.FailureMessage = httpErr.Error()
 		amx.Log.Details = "AMX login api has been failed"
@@ -83,7 +82,7 @@ func (amx *AMXConfig) Login() string {
 	}
 
 	res, _ := io.ReadAll(response.Body)
-	log.Info("Response Received : ", string(res))
+	log.Info().Stringer("Requesting Url", req.URL).RawJSON("Request", json_req).Interface("Headers", req.Header).RawJSON("Response", res)
 
 	var apiRes map[string]interface{}
 	json.Unmarshal(res, &apiRes)
@@ -128,10 +127,9 @@ func (amx *AMXConfig) Build(accToken string) {
 			req, _ := http.NewRequest("GET", finalUrl, nil)
 			req.Header.Set("Authorization", "Bearer "+accToken)
 
-			log.Info("Requesting Url : ", finalUrl, " Headers : ", req.Header)
 			response, httpErr := client.Do(req)
 			if httpErr != nil {
-				log.Error("HTTP Error Occurred on segment : ", segments, httpErr)
+				log.Error().Str("Segment", segments).Str("Page", page).Err(httpErr).Stringer("Requesting Url", req.URL).Interface("Headers", req.Header).Msg("AMX Scripmaster api failed")
 				amx.Log.IsAPIFailed = true
 				amx.Log.FailureMessage = httpErr.Error()
 				amx.Log.Details = "AMX ScripMaster api has been failed"
@@ -140,7 +138,7 @@ func (amx *AMXConfig) Build(accToken string) {
 			}
 
 			res, _ := io.ReadAll(response.Body)
-			log.Info("Response Received : ", string(res))
+			log.Info().Stringer("Requesting Url", req.URL).Interface("Headers", req.Header).RawJSON("Response", res)
 
 			var apiRes map[string]interface{}
 			json.Unmarshal(res, &apiRes)
@@ -163,7 +161,7 @@ func (amx *AMXConfig) Build(accToken string) {
 
 			}
 		}
-		log.Info("API call completed for segment : ", segments)
+		log.Info().Str("Segment", segments).Msg("API call completed for segment " + segments)
 
 		if segments == "nse_cm" || segments == "bse_cm" {
 
@@ -213,14 +211,14 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 				data["symbol"].(string) == "" {
 
 				skip_count++
-				log.Info("Skipping ", data)
+				log.Debug().Interface("Data", data).Str("Segment", segment).Msg("Skipped empty symbol / Invalid remarks")
 				continue //Skipping
 			}
 
 			if segment == "nse_cm" && !amx.Check_Series(segment, data["series"].(string)) {
 
 				skip_count++
-				log.Info("Skipping nse_cm ", data)
+				log.Debug().Interface("Data", data).Str("Segment", segment).Msg("Skipped invalid series")
 				continue //Skipping
 			}
 
@@ -229,7 +227,7 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 				!strings.HasPrefix(token, "5") && (!strings.HasPrefix(token, "8") && !amx.Check_Series(segment, data["series"].(string))) {
 
 				skip_count++
-				log.Info("Skipping bse_cm ", data)
+				log.Debug().Interface("Data", data).Str("Segment", segment).Msg("Skipped invalid series / token")
 				continue //Skipping
 			}
 
@@ -286,10 +284,10 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 				data["trdSymbol"].(string))
 
 			ctx := context.Background()
-                        _, qErr := db.ExecContext(ctx, tsql)
+			_, qErr := db.ExecContext(ctx, tsql)
 
 			if qErr != nil {
-				log.Error("error in updating AMXScripmaster : ", tsql, qErr)
+				log.Error().Stack().Str("Query", tsql).Err(qErr).Msg("Error in updating AMX ScripMaster")
 				amx.Log.IsDBFailed = true
 				amx.Log.FailureMessage = qErr.Error()
 				amx.Log.Details = "Query execution failed"
@@ -297,7 +295,8 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 			}
 		}
 	}
-	log.Info("Processed - Segment : ", segment, " - Count : ", count, " - Skipped : ", skip_count)
+
+	log.Info().Str("Segment", segment).Int("Processed Count", count).Int("Skipped Count", skip_count).Msg(segment + " has been processed")
 }
 
 func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
@@ -353,14 +352,14 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 				if expDate == "" {
 
 					skip_count++
-					log.Info("Skipping expty expiry ", data)
+					log.Debug().Interface("Data", data).Str("Segment", segment).Msg("Skipped Empty Expiry")
 					continue //Skipping
 				}
 
 				if Expiry_Validate(expDate) {
 
 					skip_count++
-					log.Info("Skipping expired contract ", data)
+					log.Debug().Interface("Data", data).Str("Segment", segment).Msg("Skipped Expired Contract")
 					continue //Skipping
 				}
 
@@ -378,7 +377,7 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 			} else {
 
 				skip_count++
-				log.Info("Skipping invalid derivative contract ", data)
+				log.Debug().Interface("Data", data).Str("Segment", segment).Msg("Skipped Invalid Derivative Contract")
 				continue //Skipping
 			}
 
@@ -428,7 +427,7 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 			_, qErr := db.ExecContext(ctx, tsql)
 
 			if qErr != nil {
-				log.Error("error in updating AMXScripmaster : ", tsql, qErr)
+				log.Error().Stack().Str("Query", tsql).Err(qErr).Msg("Error in updating AMX ScripMaster")
 				amx.Log.IsDBFailed = true
 				amx.Log.FailureMessage = qErr.Error()
 				amx.Log.Details = "Query execution failed"
@@ -436,12 +435,13 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 			}
 		}
 	}
-	log.Info("Processed - Segment : ", segment, " - Count : ", count, " - Skipped : ", skip_count)
+
+	log.Info().Str("Segment", segment).Int("Processed Count", count).Int("Skipped Count", skip_count).Msg(segment + " has been processed")
 }
 
 func (amx *AMXConfig) BackUp_AMXScripMaster() {
 
-	log.Info("Backing Up...")
+	log.Info().Msg("Backing Up Data")
 	var db *sql.DB
 	var err error
 
@@ -460,23 +460,23 @@ func (amx *AMXConfig) BackUp_AMXScripMaster() {
 		amx.LogStatus()
 	}
 
-	log.Infof("Connected to : %s \n", amx.MSSQLEntities.Server)
+	log.Info().Str("Server", amx.MSSQLEntities.Server).Msg("Connected")
 
 	defer mssql.CloseDBConnection(db)
 
 	sQuery := amx.DBConfig.GetString(constants.BackUpProcedure)
 	ctx := context.Background()
-        _, qErr := db.ExecContext(ctx, sQuery)
+	_, qErr := db.ExecContext(ctx, sQuery)
 
 	if qErr != nil {
-		log.Error("error in backup AMXScripmaster : ", sQuery, qErr)
+		log.Error().Str("Query", sQuery).Err(qErr).Msg("Error in backup AMXScripmaster")
 		amx.Log.IsDBFailed = true
 		amx.Log.FailureMessage = qErr.Error()
 		amx.Log.Details = "Query execution failed"
 		amx.LogStatus()
 	}
 
-	log.Info("Back Up Completed...")
+	log.Info().Msg("Back Up Completed...")
 
 	amx.ISBackupDone = true
 }
@@ -487,7 +487,7 @@ func (amx *AMXConfig) Delete_Records(sQuery, segment string) {
 		return
 	}
 
-	log.Info("Deleting " + segment + " ...")
+	log.Info().Str("Segment", segment).Msg("Started deleting the records for " + segment)
 
 	var db *sql.DB
 	var err error
@@ -510,7 +510,7 @@ func (amx *AMXConfig) Delete_Records(sQuery, segment string) {
 	defer mssql.CloseDBConnection(db)
 
 	ctx := context.Background()
-        _, qErr := db.ExecContext(ctx, sQuery)
+	_, qErr := db.ExecContext(ctx, sQuery)
 
 	if qErr != nil {
 		amx.Log.IsDBFailed = true
@@ -519,7 +519,7 @@ func (amx *AMXConfig) Delete_Records(sQuery, segment string) {
 		amx.LogStatus()
 	}
 
-	log.Info(segment + "Cleaned...")
+	log.Info().Str("Segment", segment).Msg(segment + " records cleaned...")
 }
 
 func (amx *AMXConfig) Check_Series(segment string, series string) bool {
@@ -577,26 +577,17 @@ func (amx *AMXConfig) LogStatus() {
 
 	if amx.Log.IsAPIFailed == true {
 
-		log.Error("-----------------------------------------------------------------")
-		log.Error("Details ", amx.Log.Details)
-		log.Error("Contact : API Team")
-		log.Error("Url : ", amx.Log.Url)
-		log.Error("Error : ", amx.Log.FailureMessage)
-		log.Error("-----------------------------------------------------------------")
+		log.Error().Stack().Str("Details", amx.Log.Details).Str("Contact", "API Team").Str("Url", amx.Log.Url).Msg(amx.Log.FailureMessage)
 		os.Exit(1)
 
 	} else if amx.Log.IsDBFailed == true {
 
-		log.Error("-----------------------------------------------------------------")
-		log.Error("Details ", amx.Log.Details)
-		log.Error("Contact : MSIL Team")
-		log.Error("Error : ", amx.Log.FailureMessage)
-		log.Error("-----------------------------------------------------------------")
+		log.Error().Stack().Str("Details", amx.Log.Details).Str("Contact", "MSIL Team").Msg(amx.Log.FailureMessage)
 		os.Exit(1)
 
 	} else {
 
-		log.Info("Records updated into amx scripmaster successfully")
+		log.Info().Msg("Records updated into amx scripmaster successfully")
 
 	}
 }

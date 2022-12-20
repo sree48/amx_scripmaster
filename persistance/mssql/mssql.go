@@ -2,11 +2,12 @@ package mssql
 
 import (
 	_ "github.com/denisenkom/go-mssqldb"
-	log "github.com/sirupsen/logrus"
 	"main.go/constants"
 	configs "main.go/utils/config"
 
 	"database/sql"
+
+	"github.com/rs/zerolog/log"
 
 	"context"
 	"fmt"
@@ -25,7 +26,7 @@ func (mssql MSSQL) GetDBConnection() (*sql.DB, error) {
 
 	db, connErr := sql.Open(constants.SQL, connString)
 	if connErr != nil {
-		log.Error("Error creating connection pool: ", connErr)
+		log.Error().Stack().Err(connErr).Msg("Error In Creating Connection Pool")
 	}
 	return db, connErr
 }
@@ -38,7 +39,7 @@ func (mssql MSSQL) Reconnect() (*sql.DB, bool) {
 
 	for attempt > 0 {
 
-		log.Warnf("Reconnect.. : Attempt - %d of %d \n", n-(attempt-1), n)
+		log.Warn().Stack().Int("Attempt", n-(attempt-1)).Int("Total Attempt", n).Msg("Reconnecting...")
 		db, _ := mssql.GetDBConnection()
 
 		if IsConnected(db) {
@@ -55,8 +56,7 @@ func (mssql MSSQL) MssqlConnCheck(db *sql.DB) bool {
 	if !IsConnected(db) {
 		db, flag = mssql.Reconnect()
 		if !flag {
-
-			log.Errorf("Unable to connect database %s \n", mssql.Server)
+			log.Error().Stack().Str("Server", mssql.Server).Msg("Unable to connect database")
 			return false
 		}
 	}
@@ -69,7 +69,7 @@ func IsConnected(dbConn *sql.DB) bool {
 	err := dbConn.PingContext(c)
 
 	if err != nil {
-		log.Error("error while creating mssql connection :", err)
+		log.Error().Stack().Err(err).Msg("Error While Creating mssql Connection")
 		return false
 	}
 

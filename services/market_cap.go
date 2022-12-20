@@ -1,29 +1,29 @@
 package services
 
 import (
-	"database/sql"
 	"context"
+	"database/sql"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"main.go/constants"
 	"main.go/persistance/mssql"
 )
 
 func (amx *AMXConfig) Build_MarketCap() {
 
-	log.Info("Updating Market Cap Details...")
+	log.Info().Msg("Updating Market Cap Details...")
 
 	var db *sql.DB
 	var err error
 
 	db, err = amx.MSSQLEntities.GetDBConnection()
 	if err != nil {
-		log.Errorln("Error in mssql connection creation")
+		log.Error().Stack().Err(err).Msg("Error in mssql connection creation")
 		return
 	}
 
 	if !amx.MSSQLEntities.MssqlConnCheck(db) {
-		log.Errorln("MSSQL Connection  Failed")
+		log.Error().Stack().Msg("MSSQL Connection  Failed")
 		return
 	}
 
@@ -31,12 +31,12 @@ func (amx *AMXConfig) Build_MarketCap() {
 	sQuery := amx.DBConfig.GetString(constants.MarketCapQuery)
 
 	ctx := context.Background()
-        _, qErr := db.ExecContext(ctx, sQuery)
+	_, qErr := db.ExecContext(ctx, sQuery)
 
 	if qErr != nil {
-		log.Error("error in Updating Market Cap Details : ", sQuery, qErr)
+		log.Error().Str("Query", sQuery).Err(qErr).Msg("Error In Updating Market Cap Details")
 		return
 	}
 
-	log.Info("Market Cap Details Updated")
+	log.Info().Msg("Market Cap Details Updated")
 }
