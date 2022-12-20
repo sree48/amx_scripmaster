@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"context"
 
 	log "github.com/sirupsen/logrus"
 	"main.go/constants"
@@ -86,7 +87,9 @@ func (amx *AMXConfig) UpdateStockID() {
 			sid,
 			isin)
 
-		_, qErr := db.Query(tsql)
+		ctx := context.Background()
+                _, qErr := db.ExecContext(ctx, tsql)
+
 		if qErr != nil {
 			log.Error("Error in stock id updation : ", tsql, qErr)
 		}

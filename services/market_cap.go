@@ -2,6 +2,7 @@ package services
 
 import (
 	"database/sql"
+	"context"
 
 	log "github.com/sirupsen/logrus"
 	"main.go/constants"
@@ -28,7 +29,10 @@ func (amx *AMXConfig) Build_MarketCap() {
 
 	defer mssql.CloseDBConnection(db)
 	sQuery := amx.DBConfig.GetString(constants.MarketCapQuery)
-	_, qErr := db.Query(sQuery)
+
+	ctx := context.Background()
+        _, qErr := db.ExecContext(ctx, sQuery)
+
 	if qErr != nil {
 		log.Error("error in Updating Market Cap Details : ", sQuery, qErr)
 		return

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"context"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -113,12 +114,14 @@ func (amx *AMXConfig) Build(accToken string) {
 	amx.Delete_Records(amx.DBConfig.GetString(constants.DeleteDerivative), "Derivative")
 
 	wg.Add(len(amx.vSegments))
+
 	for _, segments := range amx.vSegments {
 
 		isLastPage := false
 		page := "1"
 
 		for isLastPage == false {
+
 			finalUrl := url + "exchange=" + segments + "&page=" + page
 
 			client := http.Client{}
@@ -161,6 +164,7 @@ func (amx *AMXConfig) Build(accToken string) {
 			}
 		}
 		log.Info("API call completed for segment : ", segments)
+
 		if segments == "nse_cm" || segments == "bse_cm" {
 
 			go amx.Parse_EQ(segmentData[segments], segments)
@@ -233,6 +237,11 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 			assetClass := "cash"
 			expDate := "01 Jan 1980"
 
+			var details = "-"
+			if data["securityDesc"].(string) != "" {
+				details = data["securityDesc"].(string)
+			}
+
 			sQuery := amx.DBConfig.GetString(constants.EQInsertQuery)
 			tsql := fmt.Sprintf(
 				sQuery,
@@ -243,7 +252,7 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 				data["instrumentType"].(string),
 				divider, precision, assetClass,
 				helper.GetMaturityDate(data["issueMaturityDate"].(string)),
-				data["securityDesc"].(string),
+				details,
 				helper.SetPrecision(strconv.Itoa(int(data["priceTick"].(float64))), divider, precision),
 				strconv.Itoa(int(data["minimumLot"].(float64))),
 				strconv.Itoa(int(data["lowPriceRange"].(float64))),
@@ -266,7 +275,7 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 				data["marketType"].(string),
 				strconv.Itoa(int(data["openInterest"].(float64))),
 				strconv.Itoa(int(data["totalValueTraded"].(float64))),
-				data["securityDesc"].(string),
+				details,
 				helper.GetFreezepercentage(strconv.Itoa(int(data["freezePercent"].(float64))), divider, precision),
 				data["deliveryUnit"].(string),
 				strconv.Itoa(int(data["basePrice"].(float64))),
@@ -276,7 +285,9 @@ func (amx *AMXConfig) Parse_EQ(segData []interface{}, segment string) {
 				data["issueStartDate"].(string),
 				data["trdSymbol"].(string))
 
-			_, qErr := db.Query(tsql)
+			ctx := context.Background()
+                        _, qErr := db.ExecContext(ctx, tsql)
+
 			if qErr != nil {
 				log.Error("error in updating AMXScripmaster : ", tsql, qErr)
 				amx.Log.IsDBFailed = true
@@ -413,7 +424,9 @@ func (amx *AMXConfig) Parse_Derv(segData []interface{}, segment string) {
 				data["issueStartDate"].(string),
 				data["trdSymbol"].(string))
 
-			_, qErr := db.Query(tsql)
+			ctx := context.Background()
+			_, qErr := db.ExecContext(ctx, tsql)
+
 			if qErr != nil {
 				log.Error("error in updating AMXScripmaster : ", tsql, qErr)
 				amx.Log.IsDBFailed = true
@@ -452,7 +465,9 @@ func (amx *AMXConfig) BackUp_AMXScripMaster() {
 	defer mssql.CloseDBConnection(db)
 
 	sQuery := amx.DBConfig.GetString(constants.BackUpProcedure)
-	_, qErr := db.Query(sQuery)
+	ctx := context.Background()
+        _, qErr := db.ExecContext(ctx, sQuery)
+
 	if qErr != nil {
 		log.Error("error in backup AMXScripmaster : ", sQuery, qErr)
 		amx.Log.IsDBFailed = true
@@ -494,7 +509,9 @@ func (amx *AMXConfig) Delete_Records(sQuery, segment string) {
 
 	defer mssql.CloseDBConnection(db)
 
-	_, qErr := db.Query(sQuery)
+	ctx := context.Background()
+        _, qErr := db.ExecContext(ctx, sQuery)
+
 	if qErr != nil {
 		amx.Log.IsDBFailed = true
 		amx.Log.FailureMessage = qErr.Error()
